@@ -1,0 +1,136 @@
+#Viraly
+npx react-native init InstagramClone
+cd InstagramClonenpm install @react-navigation/native @react-navigation/stack react-native-gesture-handler react-native-reanimated react-native-screens react-native-safe-area-context @react-native-firebase/app @react-native-firebase/auth @react-native-firebase/firestore @react-native-firebase/storage// App.js
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+
+const Stack = createStackNavigator();
+
+const App = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default App;// screens/LoginScreen.js
+import React, { useState } from 'react';
+import { View, TextInput, Button, Alert } from 'react-native';
+import auth from '@react-native-firebase/auth';
+
+const LoginScreen = ({ navigation }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = async () => {
+    try {
+      await auth().signInWithEmailAndPassword(email, password);
+      navigation.navigate('Home');
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  return (
+    <View>
+      <TextInput placeholder="Email" value={email} onChangeText={setEmail} />
+      <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <Button title="Login" onPress={handleLogin} />
+      <Button title="Sign Up" onPress={() => navigation.navigate('SignUp')} />
+    </View>
+  );
+};
+
+export default LoginScreen;// screens/HomeScreen.js
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, Image } from 'react-native';
+import firestore from '@react-native-firebase/firestore';
+
+const HomeScreen = () => {
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection('posts')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot(snapshot => {
+        const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPosts(postsData);
+      });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <View>
+      <FlatList
+        data={posts}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <View>
+            <Image source={{ uri: item.imageUrl }} style={{ width: 100, height: 100 }} />
+            <Text>{item.caption}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+};
+
+export default HomeScreen;// components/UploadPost.js
+import React, { useState } from 'react';
+import { Button, TextInput, Alert } from 'react-native';
+import storage from '@react-native-firebase/storage';
+import firestore from '@react-native-firebase/firestore';
+
+const UploadPost = () => {
+  const [caption, setCaption] = useState('');
+  const [image, setImage] = useState(null);
+
+  const handleUpload = async () => {
+    if (!image) {
+      Alert.alert('Error', 'Please select an image');
+      return;
+    }
+
+    const uploadUri = image;
+    const filename = uploadUri.substring(uploadUri.lastIndexOf('/') + 1);
+    const storageRef = storage().ref(`posts/${filename}`);
+
+    try {
+      await storageRef.putFile(uploadUri);
+      const imageUrl = await storageRef.getDownloadURL();
+
+      await firestore().collection('posts').add({
+        caption,
+        imageUrl,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      Alert.alert('Success', 'Post uploaded successfully');
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  return (
+    <View>
+      <TextInput placeholder="Caption" value={caption} onChangeText={setCaption} />
+      <Button title="Pick Image" onPress={() => {/* Add image picker logic */}} />
+      <Button title="Upload" onPress={handleUpload} />
+    </View>
+  );
+};
+
+export default UploadPost;npx react-native run-android
+# or
+npx react-native run-ios
